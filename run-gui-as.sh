@@ -8,7 +8,8 @@ set -e
 function run() {
     set +e
     xhost +"${AUTHSTRING}" > /dev/null
-    sudo -k --askpass -u "${AUTHUSER}" "${APPLICATION}"
+    # shellcheck disable=SC2086
+    sudo -k --askpass -u "${AUTHUSER}" ${APPLICATION_CMD}
     xhost -"${AUTHSTRING}" > /dev/null
     sudo -K
 }
@@ -21,20 +22,38 @@ function usage() {
 
 [[ "$1" == "" ]] && usage  && exit 1;
 
+
+if [[ "$1" == "-u" ]];then
+    AUTHUSER="$2"
+    shift 2;
+elif [[ "$1" =~ "-u" ]];then
+    AUTHUSER="${1/-u/}"
+    shift 1;
+fi
+
+
 APPLICATION="$(which -- "$1")"
+APPLICATION_CMD="$*"
 
 [[ "$APPLICATION" == "" ]] && echo "Unknown application: $1" >&2 && exit 1
 
 
-if [[ "$2" == "" ]];then
+if [[ "$AUTHUSER" == "" ]];then
     APPLICATION_NAME="$(basename "$APPLICATION")"
-    if [[ "$RUN_GUI_AS_NOLOGIN" = "" ]];then
-        AUTHUSER="$(grep -v nologin /etc/passwd | cut -d ':' -f 1 | rofi -dmenu -no-fixed-num-lines -p 'Run as user' -select "$APPLICATION_NAME")"
+    if [[ "$RUN_GUI_AS_FORCE_APPLICATION_USER" = "1" ]]; then
+        if ! grep -q "$APPLICATION_NAME" /etc/passwd ;then
+            # shellcheck disable=SC2086
+            rofi $RUN_GUI_AS_ROFI_ARGS -e "User '${APPLICATION_NAME}' does not exist!"
+            exit 1
+        fi
+        AUTHUSER="$APPLICATION_NAME"
+    elif [[ "$RUN_GUI_AS_NOLOGIN" = "" ]];then
+        # shellcheck disable=SC2086
+        AUTHUSER="$(grep -v nologin /etc/passwd | cut -d ':' -f 1 | rofi -dmenu -no-fixed-num-lines -p 'Run as user' -select "$APPLICATION_NAME" $RUN_GUI_AS_ROFI_ARGS)"
     else
-        AUTHUSER="$(cut -d ':' -f 1 /etc/passwd | rofi -dmenu -no-fixed-num-lines -p 'Run as user' -select "$APPLICATION_NAME")"
+        # shellcheck disable=SC2086
+        AUTHUSER="$(cut -d ':' -f 1 /etc/passwd | rofi -dmenu -no-fixed-num-lines -p 'Run as user' -select "$APPLICATION_NAME" $RUN_GUI_AS_ROFI_ARGS)"
     fi
-else
-    AUTHUSER="$2"
 fi
 
 
@@ -42,6 +61,6 @@ fi
 
 
 AUTHSTRING=SI:localuser:${AUTHUSER}
-echo "RUN '$APPLICATION' AS '$AUTHUSER'"
+echo "RUN '$APPLICATION_CMD' AS '$AUTHUSER'"
 
 run
