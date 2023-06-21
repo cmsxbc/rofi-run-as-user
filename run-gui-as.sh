@@ -32,7 +32,11 @@ elif [[ "$1" =~ "-u" ]];then
 fi
 
 
-APPLICATION="$(which -- "$1")"
+if [[ "$1" = */* ]];then
+    APPLICATION="$(realpath "$1")"
+else
+    APPLICATION="$(which -- "$1")"
+fi
 APPLICATION_CMD="$*"
 
 [[ "$APPLICATION" == "" ]] && echo "Unknown application: $1" >&2 && exit 1
